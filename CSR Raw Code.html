@@ -1,0 +1,1822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Archive: CSR-3D Analysis</title>
+    
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/TextPlugin.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Aldrich&family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400&display=swap');
+
+        :root {
+            --bg-color: #050510;
+            --primary: #B000FF; /* Neon Purple */
+            --accent: #00E0FF;  /* Cyan */
+            --glass-bg: rgba(12, 10, 29, 0.7);
+            --glass-border: rgba(0, 224, 255, 0.3);
+            --text-main: #ffffff;
+            --text-dim: #a0a0a0;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg-color);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-main);
+            overflow-x: hidden;
+            cursor: none; /* Custom cursor */
+        }
+
+        /* --- 3D Background Canvas --- */
+        #bg-canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: -1;
+        }
+
+        /* --- Custom Cursor --- */
+        #cursor {
+            position: fixed;
+            width: 20px; height: 20px;
+            border: 2px solid var(--accent);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 9999;
+            transform: translate(-50%, -50%);
+            transition: width 0.3s, height 0.3s, background 0.3s;
+            mix-blend-mode: exclusion;
+        }
+        body:hover #cursor { width: 40px; height: 40px; background: rgba(0, 224, 255, 0.2); }
+
+        /* --- Layout Container --- */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            position: relative;
+            z-index: 10;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- Header Section --- */
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            opacity: 0;
+            padding-top: 20px;
+        }
+
+        h1 {
+            font-family: 'Aldrich', sans-serif;
+            font-size: 3.5rem;
+            color: var(--primary);
+            text-shadow: 0 0 20px var(--primary);
+            letter-spacing: 4px;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--accent);
+            font-size: 0.9rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        /* --- Stats Grid --- */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+            opacity: 0;
+        }
+
+        .stat-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            padding: 15px;
+            border-radius: 4px;
+            backdrop-filter: blur(10px);
+            text-align: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .stat-card:hover {
+            box-shadow: 0 0 20px rgba(176, 0, 255, 0.3);
+            border-color: var(--primary);
+        }
+
+        .stat-label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+        .stat-value { font-family: 'Aldrich', sans-serif; font-size: 1.4rem; color: var(--accent); margin-top: 5px; }
+
+        /* --- Code Window --- */
+        .code-window {
+            background: rgba(5, 5, 10, 0.9);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+            opacity: 0;
+            transform: translateY(30px);
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .window-header {
+            background: rgba(255,255,255,0.03);
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .window-controls { display: flex; gap: 8px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; opacity: 0.7; }
+        .red { background: #ff5f56; }
+        .yellow { background: #ffbd2e; }
+        .green { background: #27c93f; }
+
+        .filename { 
+            font-family: 'JetBrains Mono', monospace; 
+            color: var(--text-dim); 
+            font-size: 0.85rem; 
+            opacity: 0.8;
+        }
+
+        .btn-copy {
+            background: rgba(0, 224, 255, 0.1);
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            padding: 6px 16px;
+            border-radius: 2px;
+            font-family: 'Aldrich', sans-serif;
+            font-size: 0.75rem;
+            cursor: none;
+            letter-spacing: 1px;
+            transition: all 0.3s;
+        }
+        .btn-copy:hover {
+            background: var(--accent);
+            color: #000;
+            box-shadow: 0 0 15px var(--accent);
+        }
+
+        /* --- Code Block --- */
+        .code-content {
+            padding: 0;
+            height: 550px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+
+        /* Custom Scrollbar */
+        .code-content::-webkit-scrollbar { width: 6px; }
+        .code-content::-webkit-scrollbar-track { background: #050510; }
+        .code-content::-webkit-scrollbar-thumb { background: var(--primary); }
+
+        /* --- Footer --- */
+        footer {
+            margin-top: 40px;
+            text-align: center;
+            opacity: 0;
+            padding-bottom: 20px;
+        }
+        
+        .footer-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 15px;
+            background: rgba(12, 10, 29, 0.8);
+            border: 1px solid var(--primary);
+            padding: 12px 30px;
+            border-radius: 50px;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 20px rgba(176, 0, 255, 0.15);
+        }
+
+        .footer-text {
+            font-family: 'Aldrich', sans-serif;
+            font-size: 0.85rem;
+            color: var(--text-main);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        
+        .footer-highlight {
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        .separator { color: var(--text-dim); opacity: 0.5; }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="bg-canvas"></canvas>
+    
+    <div id="cursor"></div>
+
+    <div class="container">
+        <header>
+            <h1 id="title-text">CSR: ANALYSIS PROTOCOL</h1>
+            <div class="subtitle">SOURCE CODE EXTRACTION // SECURE ARCHIVE</div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">File Structure</div>
+                <div class="stat-value">HTML5 / WebGL</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Lines of Code</div>
+                <div class="stat-value">1421</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Core Engine</div>
+                <div class="stat-value">GSAP + THREE.js</div>
+            </div>
+        </div>
+
+        <div class="code-window">
+            <div class="window-header">
+                <div class="window-controls">
+                    <div class="dot red"></div>
+                    <div class="dot yellow"></div>
+                    <div class="dot green"></div>
+                </div>
+                <div class="filename">csr_presentation_source.html</div>
+                <button class="btn-copy" onclick="copyCode()">COPY SYSTEM CODE</button>
+            </div>
+            <div class="code-content">
+<pre><code class="language-html" id="raw-code">
+&lt;!DOCTYPE html&gt;
+&lt;html lang="en"&gt;
+&lt;head&gt;
+    &lt;meta charset="UTF-8"&gt;
+    &lt;meta name="viewport" content="width=device-width, initial-scale=1.0"&gt;
+    &lt;title&gt;Case Studies in CSR: A 3D Analysis&lt;/title&gt;
+    
+    &lt;script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"&gt;&lt;/script&gt;
+    &lt;script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"&gt;&lt;/script&gt;
+    &lt;script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/TextPlugin.min.js"&gt;&lt;/script&gt;
+
+    &lt;style&gt;
+        /*
+        ==========================================================================
+        1. GLOBAL & FONT SETUP (Cyberpunk Theme)
+        ==========================================================================
+        */
+        @import url('https://fonts.googleapis.com/css2?family=Aldrich&family=Inter:wght@300;400;700&display=swap');
+
+        :root {
+            /* NEW Colors: Cyberpunk Neon */
+            --color-bg: #0C0A1D; /* Near Black Purple */
+            /* [FIX] These are now DYNAMIC. GSAP will change them. */
+            --color-primary: #B000FF; /* [FIX] New, darker Purple */
+            --color-secondary: #FFC600; /* Cyber Yellow */
+            --color-accent: #00E0FF; /* Electric Cyan */
+            --color-text: #FFFFFF;
+            --color-text-dim: #9E9E9E;
+            
+            /* Glassmorphism */
+            --color-glass-bg: rgba(12, 10, 29, 0.3);
+            --color-glass-border: rgba(0, 224, 255, 0.3);
+            --glass-blur: 2px; /* [FIX] Reduced blur for more background visibility */
+
+            /* Fonts */
+            --font-heading: 'Aldrich', sans-serif; /* New "tech" font */
+            --font-body: 'Inter', sans-serif; /* Clean body font */
+            
+            /* Animation */
+            --transition-speed: 0.6s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: var(--font-body);
+            color: var(--color-text);
+        }
+
+        body {
+            background-color: var(--color-bg);
+            overflow: hidden;
+            user-select: none;
+            cursor: none; /* Hide default cursor */
+        }
+        
+        /*
+        ==========================================================================
+        2. 3D BACKGROUND & CUSTOM CURSOR
+        ==========================================================================
+        */
+        
+        #three-bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #custom-cursor {
+            position: fixed;
+            width: 30px;
+            height: 30px;
+            border: 2px solid var(--color-primary); /* New Color */
+            border-radius: 50%;
+            z-index: 1000;
+            pointer-events: none;
+            transform: translate(-50%, -50%) scale(1);
+            transition: width 0.2s, height 0.2s, opacity 0.2s, background-color 0.2s, transform 0.1s, border-color 1s ease-in-out; /* [FIX] Color transition */
+            mix-blend-mode: exclusion;
+        }
+        
+        .hovered #custom-cursor {
+            transform: translate(-50%, -50%) scale(1.5);
+            background-color: var(--color-primary); /* New Color */
+            opacity: 0.5;
+        }
+        
+        /*
+        ==========================================================================
+        3. PRESENTATION UI (Nav, Progress Bar)
+        ==========================================================================
+        */
+        #presentation-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            z-index: 2;
+            perspective: 2000px; /* Enable 3D transitions for slides */
+        }
+        
+        .nav-button {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 70px;
+            height: 70px;
+            background: var(--color-glass-bg);
+            border: 1px solid var(--color-glass-border);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            z-index: 100;
+            opacity: 0.7;
+            backdrop-filter: blur(var(--glass-blur));
+            transition: all 0.3s ease;
+        }
+
+        .nav-button:hover {
+            opacity: 1;
+            box-shadow: 0 0 25px var(--color-primary); /* New Color */
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        #nav-prev { left: 40px; }
+        #nav-next { right: 40px; }
+        
+        .nav-button svg { 
+            fill: var(--color-accent); 
+            width: 40px; 
+            height: 40px; 
+            transition: fill 1s ease-in-out; /* [FIX] Allow color to be animated */
+        }
+
+        #progress-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 6px;
+            background: var(--color-glass-bg);
+            z-index: 99;
+        }
+
+        #progress-indicator {
+            height: 100%;
+            width: 0%;
+            background: var(--color-primary); /* New Color */
+            box-shadow: 0 0 15px var(--color-primary); /* New Color */
+            transition: width 0.5s cubic-bezier(0.25, 0.8, 0.25, 1), background-color 1s ease-in-out, box-shadow 1s ease-in-out; /* [FIX] Color transition */
+        }
+
+        /*
+        ==========================================================================
+        4. SLIDE STYLING (Glassmorphism)
+        ==========================================================================
+        */
+        .slide {
+            position: absolute;
+            top: 5%;
+            left: 5%;
+            width: 90%;
+            height: 90%;
+            
+            background: var(--color-glass-bg);
+            border: 1px solid var(--color-glass-border);
+            border-radius: 20px;
+            backdrop-filter: blur(var(--glass-blur));
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+            
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            padding: 50px;
+            
+            transform-style: preserve-3d;
+            opacity: 0;
+            visibility: hidden;
+            
+            overflow: hidden; 
+        }
+
+        /*
+        ==========================================================================
+        5. CONTENT STYLING (Headers, Lists, Grids)
+        ==========================================================================
+        */
+        
+        h1 {
+            font-family: var(--font-heading);
+            font-size: 4.2rem; 
+            font-weight: 800;
+            letter-spacing: 1px; /* Adjusted for Aldrich */
+            color: var(--color-primary); /* [FIX] Changed from --color-text to use dynamic color */
+            margin-bottom: 10px;
+            text-align: center;
+            transition: color 1s ease-in-out; /* [FIX] Added transition for smooth color change */
+        }
+
+        h2 {
+            font-family: var(--font-heading);
+            font-size: 1.8rem; 
+            font-weight: 300;
+            color: var(--color-secondary); /* [FIX] Changed from --color-accent to --color-secondary */
+            margin-bottom: 30px;
+            text-align: center;
+            letter-spacing: 1px; /* Adjusted for Aldrich */
+            transition: color 1s ease-in-out; /* [FIX] Allow color to be animated */
+        }
+
+        h3 {
+            font-family: var(--font-heading);
+            font-size: 1.85rem; /* 30px */
+            font-weight: 600;
+            color: var(--color-accent); /* [FIX] This now uses the accent color */
+            margin-bottom: 20px;
+            width: 100%;
+            border-bottom: 1px solid var(--color-glass-border);
+            padding-bottom: 15px; /* More spacing */
+            transition: color 1s ease-in-out; /* [FIX] Allow color to be animated */
+        }
+        
+        p {
+            font-size: 1.2rem; /* Increased */
+            line-height: 1.7;
+            font-weight: 300;
+            max-width: 900px; /* Increased */
+            text-align: center;
+        }
+        
+        strong {
+            font-weight: 600;
+            color: var(--color-secondary); /* [FIX] This now uses the secondary color */
+            transition: color 1s ease-in-out; /* [FIX] Allow color to be animated */
+        }
+        
+        .content-wrapper {
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-start;
+            width: 100%;
+            height: 100%;
+            padding: 20px;
+            gap: 40px;
+        }
+        
+        .content-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            height: 100%;
+        }
+        
+        .key-item {
+            font-size: 1.2rem; /* Increased */
+            line-height: 1.7;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .key-item::before {
+            content: '■'; /* Changed from '►' */
+            font-size: 1.2rem;
+            color: var(--color-accent); /* [FIX] This now uses the accent color */
+            margin-right: 15px;
+            margin-top: 7px; /* Aligns better */
+            flex-shrink: 0;
+            transition: color 1s ease-in-out; /* [FIX] Allow color to be animated */
+        }
+        
+        .logo-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 40px;
+            width: 100%;
+            align-items: center;
+        }
+        
+        .logo {
+            width: 100%;
+            max-width: 150px;
+            height: 80px; /* Set fixed height for uniformity */
+            object-fit: contain; /* Ensures logos scale correctly */
+            filter: grayscale(100%) brightness(3) opacity(0.7);
+            transition: all 0.3s ease;
+        }
+        .logo:hover {
+            filter: none;
+            opacity: 1;
+        }
+        
+        /*
+        ==========================================================================
+        6. SLIDE-SPECIFIC STYLING
+        ==========================================================================
+        */
+
+        .slide[data-slide="1"] {
+            position: relative; /* Needed for scanline */
+        }
+        
+        .slide[data-slide="1"] h1 {
+            font-size: 5.5rem; 
+            /* [NEW] Enhanced text glow for title */
+            text-shadow: 0 0 10px var(--color-accent), 0 0 25px var(--color-accent), 0 0 40px var(--color-primary);
+            color: var(--color-text); /* [FIX] Override h1 default to keep title white */
+        }
+        
+        /* [FIX] Override h2 on slide 1 to be --color-accent for better contrast */
+        .slide[data-slide="1"] h2 {
+            color: var(--color-accent);
+        }
+
+        .slide[data-slide="1"] .team-grid { 
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px 30px; 
+            width: 100%;
+            max-width: 1200px;
+            margin-top: 20px;
+            text-align: center;
+        }
+        .slide[data-slide="1"] .team-member { 
+            font-size: 1.0rem; 
+            color: var(--color-text-dim); /* New Color */
+            font-weight: 400;
+        }
+        .slide[data-slide="1"] .team-member strong { 
+            font-size: 1.25rem; 
+            color: var(--color-text);
+            display: block;
+            margin-bottom: 2px; 
+        }
+        .slide[data-slide="1"] .meta-info {
+            font-size: 1.2rem;
+            color: var(--color-accent);
+            margin-top: 30px;
+        }
+        
+        .slide[data-slide="2"] .content-wrapper {
+            flex-direction: column;
+            align-items: center;
+        }
+        .slide[data-slide="2"] .key-item-grid {
+            display: flex;
+            width: 100%;
+            justify-content: space-around;
+            gap: 30px;
+            margin-top: 30px;
+        }
+        .slide[data-slide="2"] .key-item {
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background: var(--color-glass-bg);
+            border: 1px solid var(--color-glass-border);
+            border-radius: 10px;
+            flex: 1;
+            font-size: 1.1rem; /* Slightly smaller for the box */
+        }
+        .slide[data-slide="2"] .key-item::before {
+            font-size: 2rem;
+            margin-right: 0;
+            margin-bottom: 10px;
+        }
+        .key-item[data-item="people"]::before { content: '👥'; }
+        .key-item[data-item="planet"]::before { content: '🌍'; }
+        .key-item[data-item="profit"]::before { content: '📈'; }
+        
+        
+        .slide[data-slide="4"] h1,
+        .slide[data-slide="6"] h1,
+        .slide[data-slide="8"] h1,
+        .slide[data-slide="10"] h1,
+        .slide[data-slide="12"] h1 {
+            font-size: 3.5rem;
+            margin-bottom: 20px;
+        }
+        
+        /* New styles for critique panels */
+        .content-section[data-section="good"] {
+            background: rgba(0, 224, 255, 0.05);
+            border-left: 5px solid var(--color-accent);
+            padding: 20px;
+            border-radius: 8px;
+            transition: background 1s ease-in-out, border-left 1s ease-in-out; /* [FIX] Allow color to be animated */
+        }
+        .content-section[data-section="critique"] {
+            background: rgba(255, 0, 153, 0.05);
+            border-left: 5px solid #D900FF; /* This can stay magenta for "critique" */
+            padding: 20px;
+            border-radius: 8px;
+            transition: background 1s ease-in-out, border-left 1s ease-in-out; /* [FIX] Allow color to be animated */
+        }
+        .content-section[data-section="critique"] h3 {
+            color: #ff8a8a; 
+        }
+        .content-section[data-section="critique"] .key-item::before {
+            color: #ff8a8a;
+        }
+
+        .comparative-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .comparative-table th, .comparative-table td {
+            border: 1px solid var(--color-glass-border);
+            padding: 20px; /* Increased padding */
+            text-align: left;
+            font-size: 1.1rem; /* Increased size */
+            vertical-align: top;
+        }
+        .comparative-table th {
+            background: rgba(0, 224, 255, 0.2);
+            font-family: var(--font-heading);
+            font-weight: 600;
+            font-size: 1.2rem; /* Increased size */
+            color: var(--color-accent); /* New Color */
+            transition: background 1s ease-in-out, color 1s ease-in-out; /* [FIX] Allow color to be animated */
+        }
+        .comparative-table tr {
+            background: transparent;
+            transition: background 0.3s;
+        }
+        .comparative-table tr:hover {
+            background: rgba(0, 224, 255, 0.05);
+        }
+        .comparative-table td:first-child {
+            font-weight: 700;
+            color: var(--color-accent); /* New Color */
+            transition: color 1s ease-in-out; /* [FIX] Allow color to be animated */
+        }
+        
+        .slide[data-slide="14"] .info-panel,
+        .slide[data-slide="15"] .info-panel { /* [NEW] Added slide 15 */
+            flex: 1;
+            background: var(--color-glass-bg);
+            border: 1px solid var(--color-glass-border);
+            border-radius: 10px;
+            padding: 30px;
+            text-align: center;
+        }
+        .slide[data-slide="14"] .info-panel h3,
+        .slide[data-slide="15"] .info-panel h3 { /* [NEW] Added slide 15 */
+            border-bottom: none;
+            padding-bottom: 0;
+            text-align: center;
+        }
+        .slide[data-slide="14"] .key-label,
+        .slide[data-slide="15"] .key-label { /* [NEW] Added slide 15 */
+             font-size: 1.1rem;
+             line-height: 1.6;
+        }
+
+        /* [NEW] Final Slide Specific Styling */
+        .final-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            width: 80%;
+            gap: 20px;
+            margin-top: 40px;
+        }
+
+        .final-stat {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--color-glass-border);
+        }
+
+        .final-stat strong {
+            display: block;
+            font-size: 2.5rem;
+            color: var(--color-primary);
+            margin-bottom: 5px;
+            text-shadow: 0 0 10px var(--color-primary);
+            transition: color 1s ease-in-out, text-shadow 1s ease-in-out; /* [FIX] Allow color to be animated */
+        }
+
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    
+    &lt;canvas id="three-bg-canvas"&gt;&lt;/canvas&gt;
+
+    &lt;div id="progress-bar"&gt;&lt;div id="progress-indicator"&gt;&lt;/div&gt;&lt;/div&gt;
+    &lt;div id="custom-cursor"&gt;&lt;/div&gt;
+    &lt;div id="nav-prev" class="nav-button" data-cursor-hover&gt;
+        &lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"&gt;&lt;path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/&gt;&lt;/svg&gt;
+    &lt;/div&gt;
+    &lt;div id="nav-next" class="nav-button" data-cursor-hover&gt;
+        &lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"&gt;&lt;path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/&gt;&lt;/svg&gt;
+    &lt;/div&gt;
+
+    &lt;div id="presentation-container"&gt;
+
+        &lt;section class="slide" data-slide="1"&gt;
+            &lt;h1 class="reveal-1"&gt;Case Studies in CSR&lt;/h1&gt;
+            &lt;h2 class="reveal-2"&gt;An Analysis of 5 Global Organizations&lt;/h2&gt;
+            &lt;div class="team-grid reveal-3"&gt;
+                &lt;div class="team-member"&gt;&lt;strong&gt;Aditya Agarwal&lt;/strong&gt;Group Lead&lt;/div&gt;
+                &lt;div class="team-member"&gt;&lt;strong&gt;Divyansh Gupta&lt;/strong&gt;Content Creator&lt;/div&gt;
+                &lt;div class="team-member"&gt;&lt;strong&gt;Akkshhej Rawatt&lt;/strong&gt;OG&lt;/div&gt;
+                &lt;div class="team-member"&gt;&lt;strong&gt;Giriraj Agarwal&lt;/strong&gt;Interactive Designer&lt;/div&gt;
+                &lt;div class="team-member"&gt;&lt;strong&gt;Vansh Mehta&lt;/strong&gt;Script Writer&lt;/div&gt;
+                &lt;div class="team-member"&gt;&lt;strong&gt;Sanidhya Deoli&lt;/strong&gt;Research Support&lt;/div&gt;
+                &lt;div class="team-member"&gt;&lt;strong&gt;Akshat Kashyap&lt;/strong&gt;Star of the Show&lt;/div&gt;
+                &lt;div class="team-member"&gt;&lt;strong&gt;Samanvay Johari&lt;/strong&gt;Content Validator&lt;/div&gt;
+            &lt;/div&gt;
+            &lt;div class="meta-info reveal-4"&gt;
+                Dr. Prasomee Sikdar | 7 Nov 2025
+            &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;section class="slide" data-slide="2"&gt;
+            &lt;div class="content-wrapper"&gt;
+                &lt;h1 class="reveal-1"&gt;What is CSR?&lt;/h1&gt;
+                &lt;p class="reveal-2"&gt;&lt;strong&gt;Definition:&lt;/strong&gt; A business model that helps a company be socially accountable—to itself, its stakeholders, and the public.&lt;/p&gt;
+                &lt;p class="reveal-3"&gt;&lt;strong&gt;Core Idea:&lt;/strong&gt; Companies should operate in a way that enhances society and the environment, instead of contributing negatively to them.&lt;/p&gt;
+                &lt;h3 class="reveal-4" style="text-align: center; margin-top: 30px;"&gt;Key Framework: The Triple Bottom Line&lt;/h3&gt;
+                &lt;div class="key-item-grid"&gt;
+                    &lt;div class="key-item reveal-5" data-item="people"&gt;
+                        &lt;strong&gt;People:&lt;/strong&gt; Social Impact (Employees, Community)
+                    &lt;/div&gt;
+                    &lt;div class="key-item reveal-6" data-item="planet"&gt;
+                        &lt;strong&gt;Planet:&lt;/strong&gt; Environmental Impact
+                    &lt;/div&gt;
+                    &lt;div class="key-item reveal-7" data-item="profit"&gt;
+                        &lt;strong&gt;Profit:&lt;/strong&gt; Economic Impact
+                    &lt;/div&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;section class="slide" data-slide="3"&gt;
+            &lt;h1 class="reveal-1"&gt;Our 5 Companies&lt;/h1&gt;
+            &lt;h2 class="reveal-2"&gt;Five Different Approaches to CSR&lt;/h2&gt;
+            &lt;div class="logo-grid"&gt;
+                &lt;div class="reveal-3" style="text-align: center;"&gt;
+                    &lt;img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/LEGO_logo.svg/320px-LEGO_logo.svg.png" alt="LEGO" class="logo"&gt;
+                    &lt;p style="margin-top: 10px;"&gt;The Innovator&lt;/p&gt;
+                &lt;/div&gt;
+                &lt;div class="reveal-4" style="text-align: center;"&gt;
+                    &lt;img src="https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg" alt="Microsoft" class="logo"&gt;
+                    &lt;p style="margin-top: 10px;"&gt;The Tech Giant&lt;/p&gt;
+                &lt;/div&gt;
+                &lt;div class="reveal-5" style="text-align: center;"&gt;
+                    &lt;img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/Coca-Cola_logo.svg/320px-Coca-Cola_logo.svg.png" alt="Coca-Cola" class="logo"&gt;
+                    &lt;p style="margin-top: 10px;"&gt;The Global Force&lt;/p&gt;
+                &lt;/div&gt;
+                &lt;div class="reveal-6" style="text-align: center;"&gt;
+                    &lt;img src="https://upload.wikimedia.org/wikipedia/commons/8/8e/Tata_logo.svg" alt="Tata Group" class="logo"&gt;
+                    &lt;p style="margin-top: 10px;"&gt;The Philanthropic Model&lt;/p&gt;
+                &lt;/div&gt;
+                &lt;div class="reveal-7" style="text-align: center;"&gt;
+                    &lt;img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Wipro_Primary_Logo_Color_RGB.svg/320px-Wipro_Primary_Logo_Color_RGB.svg.png" alt="Wipro" class="logo"&gt;
+                    &lt;p style="margin-top: 10px;"&gt;The Ethical Leader&lt;/p&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;section class="slide" data-slide="4"&gt;
+            &lt;h1 class="reveal-1"&gt;Company 1: LEGO&lt;/h1&gt;
+            &lt;h2 class="reveal-2"&gt;"Building a Sustainable Future, Brick by Brick."&lt;/h2&gt;
+            &lt;div class="content-wrapper"&gt;
+                &lt;div class="content-section"&gt;
+                    &lt;h3 class="reveal-3"&gt;Who they are:&lt;/h3&gt;
+                    &lt;p class="key-item reveal-4" style="margin-bottom: 30px; font-size: 1.3rem;"&gt;The world's largest toy company, built on creativity and play.&lt;/p&gt;
+                    &lt;h3 class="reveal-5"&gt;Key Initiatives:&lt;/h3&gt;
+                    &lt;div class="key-item reveal-6"&gt;&lt;strong&gt;Sustainable Materials:&lt;/strong&gt; Pledge to make all core products from sustainable materials (recycled/plant-based) by 2032.&lt;/div&gt;
+                    &lt;div class="key-item reveal-7"&gt;&lt;strong&gt;LEGO Replay:&lt;/strong&gt; A circular economy program to donate used bricks to children's non-profits.&lt;/div&gt;
+                    &lt;div class="key-item reveal-8"&gt;&lt;strong&gt;Learning through Play:&lt;/strong&gt; Investing hundreds of millions in global partnerships to support children's education.&lt;/div&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;section class="slide" data-slide="5"&gt;
+            &lt;h1 class="reveal-1"&gt;LEGO: Ethical Analysis&lt;/h1&gt;
+            &lt;div class="content-wrapper"&gt;
+                &lt;div class="content-section reveal-2" data-section="good"&gt;
+                    &lt;h3&gt;The Good (The Ethics)&lt;/h3&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Innovation & Investment:&lt;/strong&gt; Genuinely investing billions in R&D to solve its core environmental problem: oil-based plastic.&lt;/div&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Long-Term Focus:&lt;/strong&gt; Using a clear, science-backed roadmap for sustainability rather than just marketing.&lt;/div&gt;
+                &lt;/div&gt;
+                &lt;div class="content-section reveal-3" data-section="critique"&gt;
+                    &lt;h3&gt;The Critique&lt;/h3&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Difficult Progress:&lt;/strong&gt; Finding a plant-based plastic with the same durability (the "clutch power") is incredibly hard, and goals have been delayed.&lt;/div&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Premium Product:&lt;/strong&gt; Like Patagonia, LEGOs are expensive, making sustainable play a luxury item.&lt;/div&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;section class="slide" data-slide="6"&gt;
+            &lt;h1 class="reveal-1"&gt;Company 2: Microsoft&lt;/h1&gt;
+            &lt;h2 class="reveal-2"&gt;"To empower every person and every organization on the planet to achieve more."&lt;/h2&gt;
+            &lt;div class="content-wrapper"&gt;
+                &lt;div class="content-section"&gt;
+                    &lt;h3 class="reveal-3"&gt;Who they are:&lt;/h3&gt;
+                    &lt;p class="key-item reveal-4" style="margin-bottom: 30px; font-size: 1.3rem;"&gt;Global technology corporation using its scale and R&D for CSR goals.&lt;/p&gt;
+                    &lt;h3 class="reveal-5"&gt;Key Initiatives:&lt;/h3&gt;
+                    &lt;div class="key-item reveal-6"&gt;&lt;strong&gt;Environmental:&lt;/strong&gt; Pledged to be &lt;strong&gt;Carbon Negative by 2030&lt;/strong&gt; (going beyond neutral) and investing $1B in a climate innovation fund.&lt;/div&gt;
+                    &lt;div class="key-item reveal-7"&gt;&lt;strong&gt;Social:&lt;/strong&gt; "AI for Good" initiative, using AI to solve humanitarian, cultural, and environmental issues.&lt;/div&gt;
+                    &lt;div class="key-item reveal-8"&gt;&lt;strong&gt;Governance:&lt;/strong&gt; Global digital skills programs and a strong focus on data privacy and security.&lt;/div&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+        &lt;/section&gt;
+        
+        &lt;section class="slide" data-slide="7"&gt;
+            &lt;h1 class="reveal-1"&gt;Microsoft: Ethical Analysis&lt;/h1&gt;
+            &lt;div class="content-wrapper"&gt;
+                &lt;div class="content-section reveal-2" data-section="good"&gt;
+                    &lt;h3&gt;The Good (The Ethics)&lt;/h3&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Using Core Strengths:&lt;/strong&gt; Leverages its best asset (technology and R&D) to solve massive global problems.&lt;/div&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Setting Standards:&lt;/strong&gt; Their 'carbon negative' goal pushes the entire tech industry to be more ambitious than just 'neutral'.&lt;/div&gt;
+                &lt;/div&gt;
+                &lt;div class="content-section reveal-3" data-section="critique"&gt;
+                    &lt;h3&gt;The Critique&lt;/h3&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Ethical Contradictions:&lt;/strong&gt; Faces major criticisms in other areas, such as complex tax avoidance strategies.&lt;/div&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Monopolistic Practices:&lt;/strong&gt; A long history of antitrust and anti-competitive accusations.&lt;/div&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Government Contracts:&lt;/strong&gt; Criticized for seeking contracts for military and surveillance technology.&lt;/div&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;section class="slide" data-slide="8"&gt;
+            &lt;h1 class="reveal-1"&gt;Company 3: Coca-Cola&lt;/h1&gt;
+            &lt;h2 class="reveal-2"&gt;The "World Without Waste" Paradox&lt;/h2&gt;
+            &lt;div class="content-wrapper"&gt;
+                &lt;div class="content-section reveal-3" style="align-items: center; background: none; border: none; padding: 0;"&gt;
+                    &lt;h3 style="text-align: center;"&gt;Stated CSR Goal 1&lt;/h3&gt;
+                    &lt;p class="key-item" style="font-size: 1.3rem;"&gt;&lt;strong&gt;"World Without Waste":&lt;/strong&gt; Goal to collect and recycle one bottle or can for every one they sell by 2030.&lt;/p&gt;
+                &lt;/div&gt;
+                &lt;div class="content-section reveal-4" style="align-items: center; background: none; border: none; padding: 0;"&gt;
+                    &lt;h3 style="text-align: center;"&gt;Stated CSR Goal 2&lt;/h3&gt;
+                    &lt;p class="key-item" style="font-size: 1.3rem;"&gt;&lt;strong&gt;Water Stewardship:&lt;/strong&gt; Pledged to replenish 100% of the water used in their beverages in water-stressed areas.&lt;/p&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;section class="slide" data-slide="9"&gt;
+            &lt;h1 class="reveal-1"&gt;Coca-Cola: Ethical Analysis&lt;/h1&gt;
+            &lt;div class="content-wrapper"&gt;
+                &lt;div class="content-section reveal-2" data-section="good"&gt;
+                    &lt;h3&gt;The Good (The Ethics)&lt;/h3&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Global Scale:&lt;/strong&gt; Their initiatives, if successful, have an enormous positive impact on global recycling and water infrastructure.&lt;/div&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Using Market Power:&lt;/strong&gt; Investing heavily in reusable/plant-based bottle R&D and funding community clean-ups.&lt;/div&gt;
+                &lt;/div&gt;
+                &lt;div class="content-section reveal-3" data-section="critique"&gt;
+                    &lt;h3&gt;The Critique&lt;/h3&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;#1 Global Polluter:&lt;/strong&gt; Consistently named the world's top plastic polluter by Break Free From Plastic.&lt;/div&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Core Business Conflict:&lt;/strong&gt; Critics argue 'recycling' is a distraction from the real solution: *producing less single-use plastic*.&lt;/div&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Water Extraction:&lt;/strong&gt; Faces severe criticism for extracting billions of liters of water from water-stressed communities.&lt;/div&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;section class="slide" data-slide="10"&gt;
+            &lt;h1 class="reveal-1"&gt;Company 4: Tata Group&lt;/h1&gt;
+            &lt;h2 class="reveal-2"&gt;"Community is not just a stakeholder... it is the very purpose of its existence."&lt;/h2&gt;
+            &lt;div class="content-wrapper"&gt;
+                &lt;div class="content-section"&gt;
+                    &lt;h3 class="reveal-3"&gt;Who they are:&lt;/h3&gt;
+                    &lt;p class="key-item reveal-4" style="margin-bottom: 30px; font-size: 1.3rem;"&gt;A massive Indian multinational conglomerate (from cars to software) with a unique ownership structure.&lt;/p&gt;
+                    &lt;h3 class="reveal-5"&gt;Key Initiatives:&lt;/h3&gt;
+                    &lt;div class="key-item reveal-6"&gt;&lt;strong&gt;Philanthropic Structure:&lt;/strong&gt; &lt;strong&gt;66% of the parent company (Tata Sons) is owned by charitable trusts.&lt;/strong&gt; Profits are legally mandated to fund social good.&lt;/div&gt;
+                    &lt;div class="key-item reveal-7"&gt;&lt;strong&gt;Community Building:&lt;/strong&gt; Built and manages entire cities (e.g., Jamshedpur) with schools, hospitals, and parks for its workers and their families.&lt;/div&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+        &lt;/section&gt;
+        
+        &lt;section class="slide" data-slide="11"&gt;
+            &lt;h1 class="reveal-1"&gt;Tata Group: Ethical Analysis&lt;/h1&gt;
+            &lt;div class="content-wrapper"&gt;
+                &lt;div class="content-section reveal-2" data-section="good"&gt;
+                    &lt;h3&gt;The Good (The Ethics)&lt;/h3&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Deeply Integrated:&lt;/strong&gt; CSR is not a department; it's the *owner* of the company. This is the deepest integration possible.&lt;/div&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Long-Term View:&lt;/strong&gt; This stable model has funded social good (education, health) for over a century, independent of market trends.&lt;/div&gt;
+                &lt;/div&gt;
+                &lt;div class="content-section reveal-3" data-section="critique"&gt;
+                    &lt;h3&gt;The Critique&lt;/h3&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Paternalistic:&lt;/strong&gt; The model is old-fashioned and can be seen as "paternalistic"—the company acting like a "father" for its workers, limiting freedom.&lt;/div&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Industrial Impact:&lt;/strong&gt; Many of their core businesses (steel, chemicals, cars) have a significant and unavoidable environmental footprint.&lt;/div&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;section class="slide" data-slide="12"&gt;
+            &lt;h1 class="reveal-1"&gt;Company 5: Wipro&lt;/h1&gt;
+            &lt;h2 class="reveal-2"&gt;"Spirit of Wipro: Resolutely Committed to Values"&lt;/h2&gt;
+            &lt;div class="content-wrapper"&gt;
+                &lt;div class="content-section"&gt;
+                    &lt;h3 class="reveal-3"&gt;Who they are:&lt;/h3&gt;
+                    &lt;p class="key-item reveal-4" style="margin-bottom: 30px; font-size: 1.3rem;"&gt;A leading Indian IT services multinational, consistently named one of the "World's Most Ethical Companies."&lt;/p&gt;
+                    &lt;h3 class="reveal-5"&gt;Key Initiatives:&lt;/h3&gt;
+                    &lt;div class="key-item reveal-6"&gt;&lt;strong&gt;Sustainability:&lt;/strong&gt; Achieved 100% renewable energy usage in India, focusing on water conservation and biodiversity.&lt;/div&gt;
+                    &lt;div class="key-item reveal-7"&gt;&lt;strong&gt;Azim Premji Foundation:&lt;/strong&gt; The founder's philanthropic arm, which owns a majority stake and funds extensive educational reform in India.&lt;/div&gt;
+                    &lt;div class="key-item reveal-8"&gt;&lt;strong&gt;Ethical Governance:&lt;/strong&gt; Strong focus on transparency, anti-corruption, and employee rights.&lt;/div&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;section class="slide" data-slide="13"&gt;
+            &lt;h1 class="reveal-1"&gt;Wipro: Ethical Analysis&lt;/h1&gt;
+            &lt;div class="content-wrapper"&gt;
+                &lt;div class="content-section reveal-2" data-section="good"&gt;
+                    &lt;h3&gt;The Good (The Ethics)&lt;/h3&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Deeply Integrated:&lt;/strong&gt; Like Tata, CSR is built into its structure. The Azim Premji Foundation uses company profits for systemic social change.&lt;/div&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Proven Leadership:&lt;/strong&gt; A multi-year winner of the "World's Most Ethical Company" award, proving a long-term commitment.&lt;/div&gt;
+                &lt;/div&gt;
+                &lt;div class="content-section reveal-3" data-section="critique"&gt;
+                    &lt;h3&gt;The Critique&lt;/h3&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Industry Challenges:&lt;/strong&gt; As a global IT firm, it faces constant ethical questions about client data privacy and the labor impact of AI.&lt;/div&gt;
+                    &lt;div class="key-item"&gt;&lt;strong&gt;Employee Attrition:&lt;/strong&gt; Like many in the IT sector, faces challenges with high employee turnover ("churn"), raising social questions about work-life balance.&lt;/div&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;section class="slide" data-slide="14"&gt;
+            &lt;h1 class="reveal-1"&gt;Comparative Analysis&lt;/h1&gt;
+            &lt;h2 class="reveal-2"&gt;Five Companies, Five Models&lt;/h2&gt;
+            &lt;table class="comparative-table reveal-3"&gt;
+                &lt;thead&gt;
+                    &lt;tr&gt;
+                        &lt;th&gt;Company&lt;/th&gt;
+                        &lt;th&gt;CSR Model&lt;/th&gt;
+                        &lt;th&gt;Key Ethical Takeaway&lt;/th&gt;
+                    &lt;/tr&gt;
+                &lt;/thead&gt;
+                &lt;tbody&gt;
+                    &lt;tr&gt;
+                        &lt;td&gt;LEGO&lt;/td&gt;
+                        &lt;td&gt;Innovation / Integrated&lt;/td&gt;
+                        &lt;td&gt;Heavy R&D for sustainability, but progress is slow & expensive.&lt;/td&gt;
+                    &lt;/tr&gt;
+                    &lt;tr&gt;
+                        &lt;td&gt;Microsoft&lt;/td&gt;
+                        &lt;td&gt;Core Strength (Tech)&lt;/td&gt;
+                        &lt;td&gt;Sets ambitious industry goals, but faces ethical contradictions in other business units.&lt;/td&gt;
+                    &lt;/tr&gt;
+                    &lt;tr&gt;
+                        &lt;td&gt;Coca-Cola&lt;/td&gt;
+                        &lt;td&gt;Greenwashing / Scale&lt;/td&gt;
+                        &lt;td&gt;Massive positive goals (water, recycling) that conflict with their core business model.&lt;/td&gt;
+                    &lt;/tr&gt;
+                    &lt;tr&gt;
+                        &lt;td&gt;Tata Group&lt;/td&gt;
+                        &lt;td&gt;Philanthropic (Owner)&lt;/td&gt;
+                        &lt;td&gt;Deeply integrated and stable, but paternalistic and tied to heavy industry.&lt;/td&gt;
+                    &lt;/tr&gt;
+                    &lt;tr&gt;
+                        &lt;td&gt;Wipro&lt;/td&gt;
+                        &lt;td&gt;Ethical / Philanthropic&lt;/td&gt;
+                        &lt;td&gt;CSR is core to ownership (Azim Premji Foundation), but faces modern tech/labor challenges.&lt;/td&gt;
+                    &lt;/tr&gt;
+                &lt;/tbody&gt;
+            &lt;/table&gt;
+        &lt;/section&gt;
+
+        &lt;section class="slide" data-slide="15"&gt;
+            &lt;h1 class="reveal-1"&gt;Conclusion&lt;/h1&gt;
+            &lt;h2 class="reveal-2"&gt;Key Takeaways for Business Ethics&lt;/h2&gt;
+            &lt;div class="content-wrapper" style="gap: 30px; padding: 0;"&gt;
+                &lt;div class="info-panel reveal-3"&gt;
+                    &lt;h3&gt;1. CSR is Not "One Size Fits All"&lt;/h3&gt;
+                    &lt;p class="key-label"&gt;It ranges from genuine innovation (LEGO) to a structural ownership model (Tata) to a marketing strategy (Coca-Cola).&lt;/p&gt;
+                &lt;/div&gt;
+                &lt;div class="info-panel reveal-4"&gt;
+                    &lt;h3&gt;2. Authenticity is Key&lt;/h3&gt;
+                    &lt;p class="key-label"&gt;Consumers and critics can tell the difference between true integration (LEGO/Wipro) and "Greenwashing" (Coca-Cola).&lt;/p&gt;
+                &lt;/div&gt;
+                &lt;div class="info-panel reveal-5"&gt;
+                    &lt;h3&gt;3. "Doing Good" is Complex&lt;/h3&gt;
+                    &lt;p class="key-label"&gt;Even good models (Microsoft, Tata) can have deep ethical contradictions with their core business operations.&lt;/p&gt;
+                &lt;/div&gt;
+            &lt;/div&gt;
+        &lt;/section&gt;
+
+        &lt;section class="slide" data-slide="16"&gt;
+            &lt;h1 class="reveal-1" style="font-size: 8rem;"&gt;THANK YOU&lt;/h1&gt;
+            &lt;h2 class="reveal-2" style="font-size: 2.5rem; color: var(--color-secondary); margin-bottom: 50px;"&gt;Our Analysis Concludes.&lt;/h2&gt;
+            
+            &lt;/section&gt;
+
+    &lt;/div&gt;
+
+    &lt;script&gt;
+    // [NEW] Register TextPlugin
+    gsap.registerPlugin(TextPlugin);
+
+    document.addEventListener("DOMContentLoaded", () => {
+    
+        // --- Global State ---
+        let currentIndex = -1; 
+        let isAnimating = false;
+        const totalSlides = 16; // [NEW] Updated to 16
+
+        // --- DOM Elements ---
+        const slides = document.querySelectorAll(".slide");
+        const progressBarIndicator = document.getElementById("progress-indicator");
+        const navNext = document.getElementById("nav-next");
+        const navPrev = document.getElementById("nav-prev");
+        const cursor = document.getElementById("custom-cursor");
+
+        /**
+         * ===================================================================
+         * [NEW] 3D PARTICLE CLOUD (Rebuilt from scratch)
+         * ===================================================================
+         */
+        let threeManager = (function() {
+            let scene, camera, renderer, particles;
+            let mouseX = 0, mouseY = 0;
+            const particleCount = 5000; // [NEW] More particles
+            
+            // [NEW] 5-Color Palette
+            const particleColors = [
+                new THREE.Color(0xB000FF), // [FIX] New, darker Purple
+                new THREE.Color(0x00E0FF), // Cyan
+                new THREE.Color(0xFFC600), // Yellow
+                new THREE.Color(0x00F5D4), // NEW Teal Green
+                new THREE.Color(0xFF5F1F)  // NEW Vibrant Orange
+            ];
+            
+            const positions = new Float32Array(particleCount * 3);
+            const velocities = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3); 
+
+            function init() {
+                const canvas = document.getElementById("three-bg-canvas");
+                scene = new THREE.Scene();
+                camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 3000); // [NEW] Adjusted far plane
+                
+                // [FIX] CAMERA IS 100% STABLE. IT WILL NOT MOVE.
+                camera.position.z = 1000; 
+
+                renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+                const particleMaterial = new THREE.PointsMaterial({
+                    size: 6, // [NEW] Bigger particles
+                    transparent: true,
+                    opacity: 0.8,
+                    blending: THREE.AdditiveBlending,
+                    vertexColors: true,
+                    sizeAttenuation: true // Makes particles smaller further away
+                });
+
+                const geometry = new THREE.BufferGeometry();
+                
+                // [NEW] Distribute particles in a 3D box to fill the screen
+                const boxSize = 2000;
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    
+                    positions[i3] = (Math.random() - 0.5) * boxSize; // x
+                    positions[i3 + 1] = (Math.random() - 0.5) * boxSize; // y
+                    positions[i3 + 2] = (Math.random() - 0.5) * boxSize; // z
+                    
+                    // [NEW] Start with a very slow, gentle floating velocity
+                    velocities[i3] = (Math.random() - 0.5) * 0.1; 
+                    velocities[i3 + 1] = (Math.random() - 0.5) * 0.1;
+                    velocities[i3 + 2] = (Math.random() - 0.5) * 0.1;
+                    
+                    // Assign random color
+                    const color = particleColors[Math.floor(Math.random() * particleColors.length)];
+                    colors[i3] = color.r;
+                    colors[i3 + 1] = color.g;
+                    colors[i3 + 2] = color.b;
+                }
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3)); 
+                
+                particles = new THREE.Points(geometry, particleMaterial);
+                scene.add(particles);
+
+                window.addEventListener('resize', onWindowResize, false);
+                document.addEventListener('mousemove', onDocumentMouseMove, false);
+
+                animate();
+            }
+
+            function animate() {
+                requestAnimationFrame(animate);
+
+                const positions = particles.geometry.attributes.position.array;
+                const boxSize = 2000;
+                const halfBox = boxSize / 2;
+
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    
+                    // [FIX] DELETED the bad velocity code that caused drifting.
+                    // velocities[i3 + 1] += (mouseY * 0.3 - positions[i3 + 1]) * 0.000005;
+                    // velocities[i3] += (mouseX * 0.3 - positions[i3]) * 0.000005;
+
+                    positions[i3] += velocities[i3];
+                    positions[i3 + 1] += velocities[i3 + 1];
+                    positions[i3 + 2] += velocities[i3 + 2];
+                    
+                    // Dampen velocity (this makes the "burst" fade out)
+                    velocities[i3] *= 0.98; // Slower dampening
+                    velocities[i3 + 1] *= 0.98;
+                    velocities[i3 + 2] *= 0.98;
+
+                    // [NEW] Box boundary check (wrap around)
+                    if (positions[i3] > halfBox) positions[i3] = -halfBox;
+                    if (positions[i3] < -halfBox) positions[i3] = halfBox;
+                    if (positions[i3 + 1] > halfBox) positions[i3 + 1] = -halfBox;
+                    if (positions[i3 + 1] < -halfBox) positions[i3 + 1] = halfBox;
+                    if (positions[i3 + 2] > halfBox) positions[i3 + 2] = -halfBox;
+                    if (positions[i3 + 2] < -halfBox) positions[i3 + 2] = halfBox;
+                }
+                
+                particles.geometry.attributes.position.needsUpdate = true;
+                
+                // [FIX] This is the mouse parallax. It is NOW the ONLY thing rotating the scene.
+                scene.rotation.y += (mouseX * 0.000005 - scene.rotation.y) * 0.05;
+                scene.rotation.x += (mouseY * 0.000005 - scene.rotation.x) * 0.05;
+                
+                // [FIX] Camera is STABLE
+                camera.lookAt(scene.position);
+                renderer.render(scene, camera);
+            }
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+            function onDocumentMouseMove(event) {
+                mouseX = (event.clientX - window.innerWidth / 2) * 2;
+                mouseY = (event.clientY - window.innerHeight / 2) * 2;
+            }
+            
+            // [FIX] Function to change particle colors
+            function updateParticleColor(primary, secondary, accent) {
+                
+                // [NEW] Create a small palette for this slide's particles
+                const slideParticleColors = [
+                    new THREE.Color(primary),
+                    new THREE.Color(secondary),
+                    new THREE.Color(accent),
+                    new THREE.Color(0xFFFFFF) // Always add white for pop
+                ];
+
+                const colors = particles.geometry.attributes.color.array;
+                
+                // Use GSAP to tween the colors
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    const color = { r: colors[i3], g: colors[i3+1], b: colors[i3+2] };
+                    
+                    // [FIX] Animate to one of this slide's palette colors randomly
+                    const randomTarget = slideParticleColors[Math.floor(Math.random() * slideParticleColors.length)];
+                    
+                    gsap.to(color, {
+                        r: randomTarget.r,
+                        g: randomTarget.g,
+                        b: randomTarget.b,
+                        duration: 1.0,
+                        ease: 'power2.inOut',
+                        onUpdate: () => {
+                            colors[i3] = color.r;
+                            colors[i3+1] = color.g;
+                            colors[i3+2] = color.b;
+                            particles.geometry.attributes.color.needsUpdate = true;
+                        }
+                    });
+                }
+            }
+            
+            // [NEW] This is the "move when slide moves" BURST effect
+            function triggerSlideChangeEffect() {
+                const burstStrength = 2.0; // How strong the "burst" is
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    // Add a random outward velocity
+                    velocities[i3] += (Math.random() - 0.5) * burstStrength;
+                    velocities[i3 + 1] += (Math.random() - 0.5) * burstStrength;
+                    velocities[i3 + 2] += (Math.random() - 0.5) * burstStrength;
+                }
+            }
+            
+            return {
+                init: init,
+                updateParticleColor: updateParticleColor, 
+                triggerSlideChangeEffect: triggerSlideChangeEffect // [NEW] Expose this function
+            };
+
+        })();
+        
+        
+        /**
+         * ===================================================================
+         * SLIDE MANAGER & ANIMATIONS (GSAP)
+         * ===================================================================
+         */
+        let slideManager = (function() {
+
+            // [NEW] 5-Color Palette Definition
+            const PALETTE = {
+                PURPLE: "#B000FF", // [FIX] New, darker Purple
+                CYAN: "#00E0FF",
+                YELLOW: "#FFC600",
+                TEAL: "#00F5D4",   // [NEW] Replaced Lime with Teal Green
+                ORANGE: "#FF5F1F"
+            };
+
+            // [NEW] Rewritten color logic to ensure 3 different colors per slide
+            const cssColors = [
+                { p: PALETTE.PURPLE, s: PALETTE.CYAN,    a: PALETTE.YELLOW },
+                { p: PALETTE.YELLOW, s: PALETTE.TEAL,    a: PALETTE.CYAN },
+                { p: PALETTE.TEAL,   s: PALETTE.ORANGE,  a: PALETTE.PURPLE },
+                { p: PALETTE.ORANGE, s: PALETTE.CYAN,    a: PALETTE.YELLOW },
+                { p: PALETTE.CYAN,   s: PALETTE.PURPLE, a: PALETTE.TEAL },
+                
+                { p: PALETTE.PURPLE, s: PALETTE.TEAL,    a: PALETTE.ORANGE },
+                { p: PALETTE.YELLOW, s: PALETTE.ORANGE,  a: PALETTE.CYAN },
+                { p: PALETTE.TEAL,   s: PALETTE.CYAN,    a: PALETTE.PURPLE },
+                { p: PALETTE.ORANGE, s: PALETTE.PURPLE, a: PALETTE.YELLOW },
+                { p: PALETTE.CYAN,   s: PALETTE.YELLOW,  a: PALETTE.TEAL },
+
+                { p: PALETTE.PURPLE, s: PALETTE.ORANGE,  a: PALETTE.CYAN },
+                { p: PALETTE.YELLOW, s: PALETTE.PURPLE, a: PALETTE.TEAL },
+                { p: PALETTE.TEAL,   s: PALETTE.YELLOW,  a: PALETTE.ORANGE },
+                // [MODIFIED] Slide 14: Comparative Analysis - Changed primary to CYAn for better contrast
+                { p: PALETTE.CYAN,   s: PALETTE.PURPLE,  a: PALETTE.YELLOW }, // Changed from ORANGE, TEAL, PURPLE
+                { p: PALETTE.PURPLE, s: PALETTE.ORANGE,  a: PALETTE.CYAN },
+                // [MODIFIED] Slide 16: Thank You - Changed primary to CYAn for better contrast
+                { p: PALETTE.CYAN,   s: PALETTE.YELLOW,    a: PALETTE.PURPLE } // Changed from PURPLE, CYAN, TEAL
+            ];
+
+            // [FIX] New function to update CSS variables AND particle colors
+            function updateSlideThemeColor(colorIndex) {
+                const palette = cssColors[colorIndex % cssColors.length];
+                
+                gsap.to(':root', {
+                    duration: 1.2, // Match transition duration
+                    ease: 'power3.inOut',
+                    '--color-accent': palette.a,
+                    '--color-secondary': palette.s,
+                    '--color-primary': palette.p
+                });
+                
+                // [FIX] Pass the actual colors, not just the index
+                threeManager.updateParticleColor(palette.p, palette.s, palette.a);
+            }
+
+
+            function resetSlide(slide) {
+                gsap.set(slide, { 
+                    autoAlpha: 0, 
+                    visibility: 'hidden', 
+                    x: 0, y: 0, z: 0, 
+                    scale: 1, scaleX: 1, scaleY: 1, 
+                    rotationX: 0, rotationY: 0, rotationZ: 0, 
+                    skewX: 0,
+                    filter: 'none', 
+                    clipPath: 'none' 
+                });
+                // [FIX] Also reset the content elements inside the slide
+                const content = slide.querySelectorAll("[class*='reveal-']");
+                gsap.set(content, {
+                    autoAlpha: 1, // Set to 1 (or opacity: 1) so they are visible for next time
+                    opacity: 1,
+                    x: 0, y: 0,
+                    scale: 1,
+                    // [FIX] Guarantee filter is NONE on content for next use
+                    filter: 'none' 
+                });
+            }
+            
+            // [FIX] This function now RETURNS the animation
+            function animateContentOut(slide) {
+                const elements = slide.querySelectorAll("[class*='reveal-']");
+                // Return the animation timeline
+                return gsap.to(elements, { 
+                    opacity: 0, 
+                    y: -30, 
+                    // [FIX] Remove blur from the exit animation to avoid ghosting
+                    filter: 'none', 
+                    duration: 0.3, // Make fade out faster
+                    stagger: 0.05,
+                    ease: "power2.in"
+                });
+            }
+            
+            function goToSlide(newIndex, direction = 'next') {
+                if (isAnimating) return;
+                
+                // [FIX] Handle looping
+                let targetIndex = newIndex;
+                if (targetIndex >= totalSlides) {
+                    targetIndex = 0; // Loop to first
+                }
+                if (targetIndex < 0) {
+                    targetIndex = totalSlides - 1; // Loop to last
+                }
+                
+                if (targetIndex === currentIndex) return; // Don't re-animate if already on slide
+                
+                isAnimating = true;
+                const oldSlide = slides[currentIndex];
+                const newSlide = slides[targetIndex];
+                const contentElements = newSlide.querySelectorAll("[class*='reveal-']");
+                
+                const timeline = gsap.timeline({
+                    onComplete: () => {
+                        isAnimating = false;
+                        currentIndex = targetIndex;
+                    }
+                });
+                
+                if (oldSlide) {
+                    timeline.add(animateContentOut(oldSlide), 0);
+                }
+                
+                const transitionDuration = 1.2;
+
+                // [FIX] Progress bar animation
+                const progress = (targetIndex === 0 && direction === 'next') ? 0 : ((targetIndex + 1) / totalSlides) * 100;
+                
+                if(targetIndex === 0 && direction === 'next') {
+                    timeline.to(progressBarIndicator, { width: `${progress}%`, duration: transitionDuration * 0.5, ease: "power3.inOut" }, 0.1);
+                } else {
+                    timeline.to(progressBarIndicator, { width: `${progress}%`, duration: transitionDuration, ease: "power3.inOut" }, 0);
+                }
+
+                // [NEW] Update theme colors AND trigger particle animation
+                updateSlideThemeColor(targetIndex);
+                if (currentIndex !== -1) { // Don't burst on the very first load
+                    threeManager.triggerSlideChangeEffect(); // <-- This triggers the "burst"
+                }
+
+                resetSlide(newSlide);
+                
+                // --- [FINAL FIX] TRANSITION LOGIC ---
+                // --- REMOVED all 'z:' animations ---
+                
+                switch(targetIndex) { // [FIX] Use targetIndex
+                    case 0: // S1: Title (3D Card Flip In & Text Decode)
+                        gsap.set(newSlide, { filter: 'none' }); 
+                        
+                        timeline.fromTo(newSlide, 
+                            { autoAlpha: 0, visibility: 'visible', rotationX: -90, scale: 0.9, immediateRender: false }, // [FIX] Replaced z with scale
+                            { autoAlpha: 1, rotationX: 0, scale: 1, duration: transitionDuration, ease: 'power3.out' }, 0.2);
+                        
+                        const title = newSlide.querySelector('.reveal-1');
+                        const originalTitle = title.innerText; 
+                        
+                        timeline.fromTo(title, 
+                            { autoAlpha: 1, y: 0, filter: 'blur(0px)' }, 
+                            { duration: 1.5, scrambleText: { text: originalTitle, chars: "█▓░01", revealDelay: 0.5, speed: 0.3 }, ease: "none" }, 
+                            0.5); 
+
+                        timeline.fromTo(newSlide.querySelectorAll('.reveal-2, .reveal-4'), 
+                            { opacity: 0, y: 30 },
+                            { opacity: 1, y: 0, stagger: 0.2, duration: 0.8, ease: 'power2.out' }, 
+                            1.2);
+                            
+                        timeline.fromTo(newSlide.querySelector('.reveal-3'),
+                            { opacity: 0, y: 30, filter: 'blur(5px)' }, // [FIX] Replaced z with y
+                            { opacity: 1, y: 0, filter: 'blur(0px)', duration: 1.0, ease: 'power3.out'},
+                            1.0);
+                        break;
+                    
+                    case 1: // S2: What is CSR? (Vertical Squeeze & Pan)
+                        timeline.to(oldSlide, { autoAlpha: 0, scaleY: 0.1, filter: 'blur(10px)', duration: transitionDuration * 0.7, ease: 'power3.in' }, 0.1);
+                        timeline.fromTo(newSlide,
+                            { autoAlpha: 0, visibility: 'visible', scaleY: 0.1, filter: 'blur(10px)' },
+                            { autoAlpha: 1, scaleY: 1, filter: 'blur(0px)', duration: transitionDuration, ease: 'power3.out' }, 0.3);
+                        timeline.fromTo(contentElements, 
+                            { opacity: 0, x: -30 },
+                            { opacity: 1, x: 0, stagger: 0.1, duration: 0.8, ease: 'power2.out' }, 
+                            0.6);
+                        break;
+                        
+                    case 2: // S3: 5 Companies (Horizontal Squeeze & Pan)
+                        timeline.to(oldSlide, { autoAlpha: 0, scaleX: 0.1, filter: 'blur(10px)', duration: transitionDuration * 0.7, ease: 'power3.in' }, 0.1);
+                        timeline.fromTo(newSlide,
+                            { autoAlpha: 0, visibility: 'visible', scaleX: 0.1, filter: 'blur(10px)' },
+                            { autoAlpha: 1, scaleX: 1, filter: 'blur(0px)', duration: transitionDuration, ease: 'power3.out' }, 0.3);
+                        timeline.fromTo(contentElements, 
+                            { opacity: 0, scale: 0.9 },
+                            { opacity: 1, scale: 1, stagger: 0.1, duration: 0.8, ease: 'power2.out' }, 
+                            0.6);
+                        break;
+                        
+                    case 3: // S4: Patagonia (Parallax Depth Slide)
+                        // [FIX] Replaced Z-axis transition with a scale/blur
+                        timeline.to(oldSlide, { autoAlpha: 0, scale: 0.8, filter: 'blur(10px)', ease: 'power3.in' }, 0.1);
+                        timeline.fromTo(newSlide, 
+                            { autoAlpha: 0, visibility: 'visible', scale: 1.2, filter: 'blur(10px)' },
+                            { autoAlpha: 1, scale: 1, filter: 'blur(0px)', duration: transitionDuration, ease: 'power3.out' }, 0.3);
+                        timeline.fromTo(contentElements, 
+                            { opacity: 0, x: 30 },
+                            { opacity: 1, x: 0, stagger: 0.1, duration: 0.8, ease: 'power2.out' }, 
+                            0.6);
+                        break;
+                        
+                    case 4: // S5: Patagonia Analysis (3D Skew Rotate)
+                        timeline.to(oldSlide, { autoAlpha: 0, rotationY: 45, x: '-50%', filter: 'blur(10px)', duration: transitionDuration, ease: 'power3.inOut' }, 0.1);
+                        timeline.fromTo(newSlide, 
+                            { autoAlpha: 0, visibility: 'visible', x: '50%', rotationY: -45, filter: 'blur(10px)' },
+                            { autoAlpha: 1, rotationY: 0, x: '0%', filter: 'blur(0px)', duration: transitionDuration, ease: 'power3.inOut' }, 0.1);
+                        timeline.fromTo(contentElements, 
+                            { opacity: 0, y: 30 },
+                            { opacity: 1, y: 0, stagger: 0.1, duration: 0.8, ease: 'power2.out' }, 
+                            0.6);
+                        break;
+                        
+                    case 5: // S6: Microsoft (Vertical Slide In from Top)
+                        timeline.to(oldSlide, { autoAlpha: 0, y: '100%', ease: 'power3.in' }, 0.1);
+                        timeline.fromTo(newSlide, 
+                            { autoAlpha: 0, visibility: 'visible', y: '-100%' },
+                            { autoAlpha: 1, y: 0, duration: transitionDuration, ease: 'power3.out' }, 0.2);
+                        timeline.fromTo(contentElements, 
+                            { opacity: 0, x: -30 },
+                            { opacity: 1, x: 0, stagger: 0.1, duration: 0.8, ease: 'power2.out' }, 
+                            0.6);
+                        break;
+                        
+                    case 6: // S7: Microsoft Analysis (Diagonal Clip-Path Wipe)
+                        timeline.to(oldSlide, { autoAlpha: 0, filter: 'blur(10px)', duration: transitionDuration * 0.5 }, 0.1);
+                        timeline.fromTo(newSlide,
+                            { autoAlpha: 0, visibility: 'visible', clipPath: 'polygon(0% 0%, 0% 0%, 0% 100%, 0% 100%)' },
+                            { autoAlpha: 1, clipPath: 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%)', duration: transitionDuration, ease: 'power3.inOut' }, 0.3);
+                        timeline.fromTo(contentElements, 
+                            { opacity: 0, scale: 0.9 },
+                            { opacity: 1, scale: 1, stagger: 0.1, duration: 0.8, ease: 'power2.out' }, 
+                            0.6);
+                        break;
+                        
+                    case 7: // S8: TOMS (Horizontal Slide In from Right)
+                        timeline.to(oldSlide, { autoAlpha: 0, x: '-100%', ease: 'power3.in' }, 0.1);
+                        timeline.fromTo(newSlide, 
+                            { autoAlpha: 0, visibility: 'visible', x: '100%' },
+                            { autoAlpha: 1, x: 0, duration: transitionDuration, ease: 'power3.out' }, 0.2);
+                        timeline.fromTo(contentElements, 
+                            { opacity: 0, x: 30 },
+                            { opacity: 1, x: 0, stagger: 0.1, duration: 0.8, ease: 'power2.out' }, 
+                            0.6);
+                        break;
+
+                    case 8: // S9: TOMS Analysis (3D Flip Vertical)
+                        timeline.to(oldSlide, { autoAlpha: 0, rotationX: 90, filter: 'blur(10px)', duration: transitionDuration, ease: 'power3.inOut' }, 0.1);
+                        timeline.fromTo(newSlide,
+                            { autoAlpha: 0, visibility: 'visible', rotationX: -90, filter: 'blur(10px)' },
+                            { autoAlpha: 1, rotationX: 0, filter: 'blur(0px)', duration: transitionDuration, ease: 'power3.inOut' }, 0.1);
+                        timeline.fromTo(contentElements, 
+                            { opacity: 0, y: 30 },
+                            { opacity: 1, y: 0, stagger: 0.1, duration: 0.8, ease: 'power2.out' }, 
+                            0.6);
+                        break;
+
+                    case 9: // S10: Tata Group (Zoom Out & 3D Skew)
+                        timeline.to(oldSlide, { autoAlpha: 0, scale: 0.8, filter: 'blur(10px)', duration: transitionDuration, ease: 'power3.in' }, 0.1);
+                        timeline.fromTo(newSlide,
+                            { autoAlpha: 0, visibility: 'visible', scale: 1.2, skewX: 20, filter: 'blur(10px)' },
+                            { autoAlpha: 1, scale: 1, skewX: 0, filter: 'blur(0px)', duration: transitionDuration, ease: 'power3.out' }, 0.3);
+                        timeline.fromTo(contentElements, 
+                            { opacity: 0, x: -30 },
+                            { opacity: 1, x: 0, stagger: 0.1, duration: 0.8, ease: 'power2.out' }, 
+                            0.6);
+                        break;
+
+                    case 10: // S11: Tata Analysis (3D Flip Horizontal)
+                        timeline.to(oldSlide, { autoAlpha: 0, rotationY: -90, filter: 'blur(10px)', duration: transitionDuration, ease: 'power3.inOut' }, 0.1);
+                        timeline.fromTo(newSlide,
+                            { autoAlpha: 0, visibility: 'visible', rotationY: 90, filter: 'blur(10px)' },
+                            { autoAlpha: 1, rotationY: 0, filter: 'blur(0px)', duration: transitionDuration, ease: 'power3.inOut' }, 0.1);
+                        timeline.fromTo(contentElements, 
+                            { opacity: 0, scale: 0.9 },
+                            { opacity: 1, scale: 1, stagger: 0.1, duration: 0.8, ease: 'power2.out' }, 
+                            0.6);
+                        break;
+
+                    case 11: // S12: Wipro (Radial Clip Path Wipe)
+                        const clipStart = 'circle(0% at 50% 50%)';
+                        const clipEnd = 'circle(75% at 50% 50%)'; 
+                        timeline.to(oldSlide, { autoAlpha: 0, scale: 0.9, duration: transitionDuration * 0.7, ease: 'power2.in' }, 0.1);
+                        timeline.fromTo(newSlide,
+                            { autoAlpha: 0, visibility: 'visible', clipPath: clipStart },
+                            { autoAlpha: 1, clipPath: clipEnd, duration: transitionDuration, ease: 'power3.inOut' }, 0.3);
+                        timeline.fromTo(contentElements, 
+                            { opacity: 0, x: 30 },
+                            { opacity: 1, x: 0, stagger: 0.1, duration: 0.8, ease: 'power2.out' }, 
+                            0.6);
+                        break;
+
+                    case 12: // S13: Wipro Analysis (NEW - Fly Through)
+                        // [FIX] Replaced Z-axis transition with a scale/blur
+                        timeline.to(oldSlide, { autoAlpha: 0, scale: 0.8, filter: 'blur(10px)', ease: 'power3.in' }, 0.1);
+                        timeline.fromTo(newSlide, 
+                            { autoAlpha: 0, visibility: 'visible', scale: 1.2, filter: 'blur(10px)' },
+                            { autoAlpha: 1, scale: 1, filter: 'blur(0px)', duration: transitionDuration, ease: 'power3.out' }, 0.3);
+                        timeline.fromTo(contentElements, 
+                            { opacity: 0, y: 30 },
+                            { opacity: 1, y: 0, stagger: 0.1, duration: 0.8, ease: 'power2.out' }, 
+                            0.6);
+                        break;
+
+                    case 13: // S14: Comparative (Camera Dolly Out for Table)
+                        timeline.to(oldSlide, { autoAlpha: 0, filter: 'blur(10px)', ease: 'power2.in' }, 0.1);
+                        timeline.fromTo(newSlide, 
+                            { autoAlpha: 0, visibility: 'visible', filter: 'blur(10px)', scale: 0.9 },
+                            { autoAlpha: 1, filter: 'blur(0px)', scale: 1, duration: transitionDuration, ease: 'power2.out' }, 0.3);
+                        timeline.fromTo(newSlide.querySelectorAll('tbody tr'), 
+                            { opacity: 0, x: -50 }, 
+                            { opacity: 1, x: 0, stagger: 0.1, duration: 0.5, ease: 'power2.out' },
+                            0.7
+                        );
+                        break;
+                        
+                    case 14: // S15: Conclusion (3D Perspective "Fly Through")
+                        // [FIX] Replaced Z-axis transition with a scale/blur
+                        timeline.to(oldSlide, { autoAlpha: 0, scale: 0.8, filter: 'blur(10px)', ease: 'power3.in' }, 0.1);
+                        timeline.fromTo(newSlide, 
+                            { autoAlpha: 0, visibility: 'visible', scale: 1.2, filter: 'blur(10px)' },
+                            { autoAlpha: 1, scale: 1, filter: 'blur(0px)', duration: transitionDuration, ease: 'power3.out' }, 0.3);
+                        timeline.fromTo(contentElements, 
+                            { opacity: 0, x: -30 },
+                            { opacity: 1, x: 0, stagger: 0.1, duration: 0.8, ease: 'power2.out' }, 
+                            0.6);
+                        break;
+
+                    case 15: // S16: Questions (Final Zoom & Fade)
+                        timeline.to(oldSlide, { autoAlpha: 0, scale: 1.2, filter: 'blur(10px)', duration: transitionDuration, ease: 'power2.in' }, 0.1);
+                        timeline.fromTo(newSlide, 
+                            { autoAlpha: 0, visibility: 'visible', scale: 0.8, filter: 'blur(10px)' },
+                            { autoAlpha: 1, scale: 1, filter: 'blur(0px)', duration: transitionDuration, ease: 'power2.out' }, 0.3);
+                        
+                        const h1 = newSlide.querySelector('.reveal-1');
+                        const h2 = newSlide.querySelector('.reveal-2');
+
+                        timeline.fromTo(h1, 
+                            { opacity: 0, y: 30, filter: 'blur(5px)' },
+                            { opacity: 1, y: 0, filter: 'blur(0px)', duration: 1.0, ease: 'power3.out' },
+                            0.8); 
+                        
+                        timeline.fromTo(h2, 
+                            { opacity: 0, y: 30, filter: 'blur(5px)' },
+                            { opacity: 1, y: 0, filter: 'blur(0px)', duration: 1.0, ease: 'power3.out' },
+                            1.0); 
+                        break;
+                }
+                        
+                if (oldSlide) {
+                    timeline.add(() => resetSlide(oldSlide), ">"); 
+                }
+            }
+            
+            return {
+                init: () => {
+                    gsap.set(slides, { autoAlpha: 0, visibility: 'hidden' });
+                    threeManager.init(); 
+                    goToSlide(0); // [FIX] This was the line with the typo. It is fixed now.
+                },
+                next: () => {
+                    if (isAnimating) return;
+                    const nextIndex = (currentIndex + 1) % totalSlides; // Loop to 0
+                    goToSlide(nextIndex, 'next');
+                },
+                prev: () => {
+                    if (isAnimating) return;
+                    let prevIndex = currentIndex - 1;
+                    if (prevIndex < 0) {
+                        prevIndex = totalSlides - 1; // Loop to last
+                    }
+                    goToSlide(prevIndex, 'prev');
+                }
+            };
+            
+        })();
+        
+
+        /**
+         * ===================================================================
+         * EVENT LISTENERS
+         * ===================================================================
+         */
+        
+        navNext.addEventListener('click', () => slideManager.next());
+        navPrev.addEventListener('click', () => slideManager.prev());
+        
+        document.addEventListener('keydown', (e) => {
+            if (isAnimating) return;
+            if (e.key === 'ArrowRight' || e.key === ' ') {
+                slideManager.next();
+            } else if (e.key === 'ArrowLeft') {
+                slideManager.prev();
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            gsap.to(cursor, { x: e.clientX, y: e.clientY, duration: 0.1, ease: "power2.out" });
+        });
+        
+        document.querySelectorAll('[data-cursor-hover]').forEach(el => {
+            el.addEventListener('mouseenter', () => document.body.classList.add('hovered'));
+            el.addEventListener('mouseleave', () => document.body.classList.remove('hovered'));
+        });
+
+        // --- START PRESENTATION ---
+        slideManager.init();
+
+    });
+    &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+            </code></pre>
+            </div>
+        </div>
+
+        <footer>
+            <div class="footer-pill">
+                <span class="footer-text">SYSTEM ARCHITECTURE: HYBRID</span>
+                <span class="separator">||</span>
+                <span class="footer-text"><span class="footer-highlight">HUMAN OPERATOR</span> + GENERATIVE AI MODEL</span>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // 1. Copy to Clipboard Functionality
+        function copyCode() {
+            const rawCode = document.getElementById('raw-code').innerText;
+            navigator.clipboard.writeText(rawCode).then(() => {
+                const btn = document.querySelector('.btn-copy');
+                const originalText = btn.innerText;
+                btn.innerText = "ACCESS GRANTED";
+                btn.style.background = "#00E0FF";
+                btn.style.color = "#000";
+                
+                setTimeout(() => {
+                    btn.innerText = originalText;
+                    btn.style.background = "rgba(0, 224, 255, 0.1)";
+                    btn.style.color = "#00E0FF";
+                }, 2000);
+            });
+        }
+
+        // 2. Entrance Animations (GSAP)
+        window.addEventListener('load', () => {
+            const tl = gsap.timeline();
+            
+            tl.to('header', { opacity: 1, duration: 1.2, ease: 'power2.out' })
+              .to('.stats-grid', { opacity: 1, duration: 1 }, "-=0.8")
+              .to('.code-window', { opacity: 1, y: 0, duration: 1.2, ease: 'power3.out' }, "-=0.6")
+              .to('footer', { opacity: 1, duration: 1 }, "-=0.6");
+              
+            // Glitch Effect for Title
+            gsap.to("#title-text", {
+                duration: 2.5,
+                scrambleText: { text: "CSR: ANALYSIS PROTOCOL", chars: "XY01_#@!<>", revealDelay: 0.5, speed: 0.2 },
+                ease: "none"
+            });
+        });
+
+        // 3. Background Logic (Simplified & Slowed Down)
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
+        camera.position.z = 500;
+        
+        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('bg-canvas'), alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        
+        // Particles - Increased Density, Slower Motion
+        const particleCount = 3000; // More dense
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        const colors = new Float32Array(particleCount * 3);
+        
+        const colorPalette = [
+            new THREE.Color(0xB000FF),
+            new THREE.Color(0x00E0FF),
+            new THREE.Color(0x5555ff)
+        ];
+
+        for(let i=0; i<particleCount; i++) {
+            // Spread them out more to avoid clumps
+            positions[i*3] = (Math.random() - 0.5) * 2000;
+            positions[i*3+1] = (Math.random() - 0.5) * 2000;
+            positions[i*3+2] = (Math.random() - 0.5) * 2000;
+            
+            const col = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+            colors[i*3] = col.r;
+            colors[i*3+1] = col.g;
+            colors[i*3+2] = col.b;
+        }
+        
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        
+        const material = new THREE.PointsMaterial({
+            size: 3,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.6,
+            blending: THREE.AdditiveBlending
+        });
+        
+        const particles = new THREE.Points(geometry, material);
+        scene.add(particles);
+        
+        // Animation Loop
+        let mouseX = 0, mouseY = 0;
+        document.addEventListener('mousemove', (e) => {
+            // Track mouse for parallax, NOT rotation speed
+            mouseX = (e.clientX - window.innerWidth/2) * 0.05;
+            mouseY = (e.clientY - window.innerHeight/2) * 0.05;
+        });
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // 1. Very slow constant rotation (breathing effect)
+            const time = Date.now() * 0.0001;
+            particles.rotation.y = time * 0.5; // Slow constant rotation
+            particles.rotation.x = Math.sin(time * 0.5) * 0.1; // Gentle sway
+
+            // 2. Subtle Parallax (Mouse moves camera slightly, not world spin)
+            camera.position.x += (mouseX - camera.position.x) * 0.05;
+            camera.position.y += (-mouseY - camera.position.y) * 0.05;
+            camera.lookAt(scene.position);
+
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        // Custom Cursor Logic
+        const cursor = document.getElementById('cursor');
+        document.addEventListener('mousemove', (e) => {
+            cursor.style.left = e.clientX + 'px';
+            cursor.style.top = e.clientY + 'px';
+        });
+
+        // Resize Handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
